@@ -1,0 +1,32 @@
+# Keep the build context to what the image needs: package files, tsconfig.json, src/ and public/.
+
+# Required by the container spec.
+node_modules
+.git
+test
+
+# Build output and caches; the image builds its own.
+dist
+coverage
+.deploy
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+*.tsbuildinfo
+
+# Not part of the runtime image.
+tools
+scripts
+.github
+docs
+*.md
+eslint.config.js
+vitest.config.ts
+Dockerfile
+.dockerignore
+
+# Never send local secrets or editor/OS litter into a build.
+.env
+.env.*
+.DS_Store

@@ -1,0 +1,49 @@
+name: Container scan
+
+# Builds the image from the Dockerfile and scans it with Trivy for known vulnerabilities in the base image
+# and in the production npm dependencies. Findings go to code scanning (the Security tab); they do not
+# fail the run, because the image carries a deliberately outdated dependency (see README.md).
+on:
+  pull_request:
+  schedule:
+    # Weekly, Wednesdays 04:13 UTC, so advisories published after the last push still show up.
+    - cron: "13 4 * * 3"
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    name: Trivy image scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      security-events: write # upload the results to code scanning
+      contents: read # check out the repository
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the container image
+        env:
+          GIT_COMMIT: ${{ github.sha }}
+        run: docker build --tag showcase:scan --build-arg GIT_COMMIT="$GIT_COMMIT" .
+
+      # `limit-severities-for-sarif` makes the SARIF report honour `severity`; without it Trivy writes
+      # every finding to a SARIF file whatever the filter says.
+      - name: Scan the image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: showcase:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          limit-severities-for-sarif: true
+
+      - name: Upload the results to code scanning
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy

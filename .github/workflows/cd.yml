@@ -1,0 +1,305 @@
+name: CD
+
+# Build the container image once, then promote that one image through dev, test and prod (SPEC.md §7).
+#
+#   build ──► deploy-dev ──► deploy-test ──► deploy-prod
+#
+# The build job is the only place an image is made. It pushes the image to GHCR and returns its digest: a
+# sha256 that names exactly those bytes. Every deploy job is handed that digest and deploys it, so dev, test and
+# prod run the same image, and what passed in one is what reaches the next. No deploy job rebuilds anything.
+#
+# The gates are GitHub environments named dev, test and prod. A person creates them and sets their protection
+# rules (DEMO.md lists what each needs); this file only names them, and a job waits at its environment's gate
+# before it starts. The deployments are mocked, by design: scripts/deploy.mjs starts the published image on
+# the runner, waits for it to be healthy, checks that it reports the environment it was started for and writes
+# a record of the digest it ran. scripts/smoke.mjs then checks the app's HTTP contract against it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Promotions run one at a time, and one that has started is never cancelled halfway: a newer push waits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# These four are the permissions SPEC.md §7.3 gives this workflow. Only the build job uses all of them; each
+# deploy job below narrows to what it needs.
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    name: Build and publish the image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write # push the image
+      id-token: write # sign the provenance attestation
+      attestations: write # store it
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A registry name has to be lowercase; an owner or repository name need not be.
+      - name: Name the image
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Read the app version
+        id: version
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The one and only image build in this workflow. The version and commit are stamped into the image, so
+      # GET /api/version names what is running; the source label links the package to this repository, which is
+      # what lets the deploy jobs pull it with their own token. Provenance and SBOM are off here because the
+      # steps below produce them as separate artefacts: left on, they would wrap the image in an index and change
+      # what "the digest" refers to.
+      - name: Build and push the image
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: false
+          sbom: false
+
+      # Every deploy job trusts this value to be a digest. Stop here, before anything is promoted, if it is not.
+      - name: Check the digest
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=No digest::the build did not return a sha256 digest, got '$DIGEST'"
+            exit 1
+          fi
+
+      # The SBOM and the attestation describe the pushed image by digest, so they are about exactly what is promoted.
+      - name: Generate the SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom.spdx.json
+
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Summarise
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "### Image built once"
+            echo
+            echo "- image: \`${IMAGE}\`"
+            echo "- digest: \`${DIGEST}\`"
+            echo
+            echo "dev, test and prod each deploy this digest. None of them builds."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-dev:
+    name: Deploy to dev
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      packages: read # pull the image
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The image is named by its digest, so what runs here is exactly what the build produced, whatever any tag
+      # points at by now. The container is left running for the smoke test; this runner is discarded when the job
+      # ends, so there is nothing to tear down.
+      - name: Deploy the image to dev
+        run: node scripts/deploy.mjs --env dev --image "${IMAGE}@${DIGEST}" --port 8080
+
+      - name: Smoke test the dev deployment
+        run: node scripts/smoke.mjs --base-url http://127.0.0.1:8080
+
+      - name: Upload the deployment record
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-record-dev
+          path: .deploy/dev.json
+          include-hidden-files: true
+
+      - name: Summarise
+        run: echo "dev is running \`${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # `needs` lists build as well as the previous environment. A job can only read the outputs of the jobs it names
+  # directly, and every deploy job reads the digest from build.
+  deploy-test:
+    name: Deploy to test
+    needs: [build, deploy-dev]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: test
+    permissions:
+      contents: read
+      packages: read # pull the image
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The same digest dev ran, not a new build of the same commit.
+      - name: Deploy the image to test
+        run: node scripts/deploy.mjs --env test --image "${IMAGE}@${DIGEST}" --port 8080
+
+      - name: Smoke test the test deployment
+        run: node scripts/smoke.mjs --base-url http://127.0.0.1:8080
+
+      - name: Upload the deployment record
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-record-test
+          path: .deploy/test.json
+          include-hidden-files: true
+
+      - name: Summarise
+        run: echo "test is running \`${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # Production is the last gate. After the same deploy and smoke test, the static site in public/ is published to
+  # GitHub Pages. Pages needs its own two permissions, and the repository's Pages source set to GitHub Actions.
+  # The deployment is recorded against the prod environment, so prod's protection rules cover it.
+  deploy-prod:
+    name: Deploy to prod
+    needs: [build, deploy-test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: prod
+    permissions:
+      contents: read
+      packages: read # pull the image
+      pages: write # publish the site
+      id-token: write # Pages checks the deployment is from this workflow
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Still the same digest, now in front of a required reviewer.
+      - name: Deploy the image to prod
+        run: node scripts/deploy.mjs --env prod --image "${IMAGE}@${DIGEST}" --port 8080
+
+      - name: Smoke test the prod deployment
+        run: node scripts/smoke.mjs --base-url http://127.0.0.1:8080
+
+      - name: Upload the deployment record
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-record-prod
+          path: .deploy/prod.json
+          include-hidden-files: true
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Package the site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: public
+
+      - name: Publish the site to GitHub Pages
+        id: pages
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Summarise
+        env:
+          PAGE_URL: ${{ steps.pages.outputs.page_url }}
+        run: |
+          {
+            echo "prod is running \`${DIGEST}\`"
+            echo
+            echo "Site: ${PAGE_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"

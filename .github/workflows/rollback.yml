@@ -1,0 +1,192 @@
+name: Rollback
+
+# Put an image you already have back into one environment (SPEC.md §7.4). Choose the environment and give the
+# digest of the image to deploy; a CD run's summary prints the digest it built.
+#
+# Nothing is built here either. The digest names an image that is already in GHCR, and scripts/deploy.mjs
+# deploys it exactly as the CD workflow does. The same environment gates apply, so rolling back prod still waits
+# for prod's reviewer.
+#
+# A rollback is judged by the checks deploy.mjs makes (the app is healthy and reports the right environment)
+# and not by scripts/smoke.mjs, which checks today's HTTP contract: an older image may legitimately predate it.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to roll back"
+        type: choice
+        required: true
+        options:
+          - dev
+          - test
+          - prod
+      digest:
+        description: "Digest of the image to deploy: sha256: followed by 64 hex digits"
+        type: string
+        required: true
+
+# Two rollbacks of one environment never run at the same time, and one that has started is never cancelled.
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # Catches a mistyped digest before anyone is asked to approve a deployment of it. The input reaches the shell
+  # only as an environment variable, so whatever it contains is data and never part of a command.
+  validate:
+    name: Check the digest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      image: ${{ steps.check.outputs.image }}
+    steps:
+      - name: Check the digest
+        id: check
+        env:
+          DIGEST: ${{ inputs.digest }}
+        run: |
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=Not a digest::digest must be sha256: followed by 64 lowercase hex digits"
+            exit 1
+          fi
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
+  # There is one job per environment, with the environment written out, rather than one job that reads it from
+  # the input: scripts/validate-workflows.mjs (rule R7) has to be able to see which environment gates each job.
+  # `if` runs only the job that was chosen, and a skipped job never asks for approval.
+  rollback-dev:
+    name: Roll back dev
+    needs: validate
+    if: ${{ inputs.environment == 'dev' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: dev
+    permissions:
+      contents: read
+      packages: read # pull the image
+    env:
+      IMAGE: ${{ needs.validate.outputs.image }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy the chosen image to dev
+        run: node scripts/deploy.mjs --env dev --image "$IMAGE" --port 8080
+
+      - name: Upload the deployment record
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rollback-record-dev
+          path: .deploy/dev.json
+          include-hidden-files: true
+
+      - name: Summarise
+        run: echo "dev is running \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  rollback-test:
+    name: Roll back test
+    needs: validate
+    if: ${{ inputs.environment == 'test' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: test
+    permissions:
+      contents: read
+      packages: read # pull the image
+    env:
+      IMAGE: ${{ needs.validate.outputs.image }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy the chosen image to test
+        run: node scripts/deploy.mjs --env test --image "$IMAGE" --port 8080
+
+      - name: Upload the deployment record
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rollback-record-test
+          path: .deploy/test.json
+          include-hidden-files: true
+
+      - name: Summarise
+        run: echo "test is running \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  rollback-prod:
+    name: Roll back prod
+    needs: validate
+    if: ${{ inputs.environment == 'prod' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: prod
+    permissions:
+      contents: read
+      packages: read # pull the image
+    env:
+      IMAGE: ${{ needs.validate.outputs.image }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy the chosen image to prod
+        run: node scripts/deploy.mjs --env prod --image "$IMAGE" --port 8080
+
+      - name: Upload the deployment record
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rollback-record-prod
+          path: .deploy/prod.json
+          include-hidden-files: true
+
+      - name: Summarise
+        run: echo "prod is running \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"

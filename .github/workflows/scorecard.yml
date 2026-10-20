@@ -1,0 +1,45 @@
+name: Scorecard
+
+# OpenSSF Scorecard grades the repository's own supply-chain hygiene: pinned actions, token permissions,
+# branch protection, dependency updates and more. The results go to code scanning (the Security tab).
+#
+# Scorecard publishes results only for public repositories; on a private one the action skips publishing
+# and still produces the SARIF file below. A private repository may also need `issues: read`,
+# `pull-requests: read` and `checks: read` on the job so Scorecard can read it fully.
+on:
+  schedule:
+    # Weekly, Tuesdays 03:41 UTC.
+    - cron: "41 3 * * 2"
+  workflow_dispatch:
+
+# Scorecard rejects a workflow that publishes results while holding write permissions at the top level,
+# so the workflow stays read-only and the single job below widens it.
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      security-events: write # upload the results to code scanning
+      id-token: write # let Scorecard publish with this workflow's OIDC identity
+      contents: read # check out the repository
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload the results to code scanning
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: results.sarif

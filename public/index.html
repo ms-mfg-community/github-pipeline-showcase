@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Widget Showcase</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 0.25rem; }
+    #version { margin-top: 0; opacity: 0.75; }
+    ul { list-style: none; padding: 0; }
+    li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.4rem 0; border-bottom: 1px solid #8884; }
+    form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin-top: 1.5rem; }
+    label { display: flex; flex-direction: column; font-size: 0.875rem; }
+    input, button { font: inherit; padding: 0.35rem 0.6rem; }
+    #quantity { width: 6rem; }
+    #error { color: #c62828; min-height: 1.5rem; }
+    @media (prefers-color-scheme: dark) { #error { color: #ef9a9a; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Widget Showcase</h1>
+    <p id="version">Loading version…</p>
+
+    <h2>Widgets</h2>
+    <ul id="widgets"></ul>
+    <p id="empty" hidden>No widgets yet. Add one below.</p>
+
+    <form id="add" novalidate>
+      <label>Name <input id="name" autocomplete="off"></label>
+      <label>Quantity <input id="quantity" type="number" step="1" value="1"></label>
+      <button type="submit">Add widget</button>
+    </form>
+    <p id="error" role="alert"></p>
+  </main>
+
+  <script>
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+
+    // Calls the JSON API. Failures carry the server's error code and any validation details.
+    async function api(path, options) {
+      const response = await fetch(path, { cache: "no-store", ...options });
+      const body = response.status === 204 ? null : await response.json();
+      if (!response.ok) {
+        const error = new Error((body && body.error) || "request_failed");
+        error.details = body && Array.isArray(body.details) ? body.details : [];
+        throw error;
+      }
+      return body;
+    }
+
+    async function run(action) {
+      $("error").textContent = "";
+      try {
+        await action();
+      } catch (error) {
+        $("error").textContent = (error.details && error.details.length ? error.details : [error.message]).join("; ");
+      }
+    }
+
+    async function loadVersion() {
+      const info = await api("/api/version");
+      $("version").textContent = "Version " + info.version + " · commit " + info.commit + " · environment " + info.environment;
+    }
+
+    function renderWidget(widget) {
+      const label = document.createElement("span");
+      label.textContent = widget.name + " × " + widget.quantity;
+      label.title = widget.id + " — created " + widget.createdAt;
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Delete";
+      remove.setAttribute("aria-label", "Delete " + widget.name);
+      remove.addEventListener("click", () => run(async () => {
+        await api("/api/widgets/" + encodeURIComponent(widget.id), { method: "DELETE" });
+        await loadWidgets();
+      }));
+
+      const item = document.createElement("li");
+      item.append(label, remove);
+      return item;
+    }
+
+    async function loadWidgets() {
+      const { items } = await api("/api/widgets");
+      $("widgets").replaceChildren(...items.map(renderWidget));
+      $("empty").hidden = items.length > 0;
+    }
+
+    $("add").addEventListener("submit", (event) => {
+      event.preventDefault();
+      run(async () => {
+        const quantity = $("quantity").value;
+        await api("/api/widgets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // An empty box is sent as "missing" so the server's own validation message is shown.
+          body: JSON.stringify({ name: $("name").value, quantity: quantity === "" ? undefined : Number(quantity) }),
+        });
+        $("name").value = "";
+        await loadWidgets();
+      });
+    });
+
+    run(() => Promise.all([loadVersion(), loadWidgets()]));
+  </script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest an improvement to the service, the tooling or the pipeline.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. This repository is a small demonstration: the service is simple on
+        purpose and the pipeline around it is the point, so ideas that make the pipeline clearer or
+        easier to demonstrate are the most likely to fit.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you ran into, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+      description: Describe the change you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Anything else you tried or thought about, and why it falls short.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Service (src)
+        - Web page (public)
+        - Python tooling (tools)
+        - Scripts (gate, deploy, smoke)
+        - Workflows (.github/workflows)
+        - Documentation
+    validations:
+      required: true
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before you submit
+      options:
+        - label: I read the README and DEMO.md, and this is not already covered.

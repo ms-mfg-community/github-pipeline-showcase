@@ -1,0 +1,4 @@
+# Runtime pins for tools/report.py (the dev toolchain lives in requirements-dev.txt).
+# requests is pinned to a version with published advisories ON PURPOSE: it is the
+# deliberately vulnerable pip dependency listed under "Intentional findings" in README.md.
+requests==2.31.0

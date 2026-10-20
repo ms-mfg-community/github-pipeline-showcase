@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in the service, the tooling or the pipeline does not work as documented.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        This is a demonstration repository. Its deliberate vulnerabilities and outdated dependencies
+        (listed under "Intentional findings" in the README) are not bugs. To report a vulnerability,
+        follow SECURITY.md instead of filing an issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect to see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands or clicks, in order. For an HTTP problem, include the request and the response.
+      placeholder: |
+        1. Run ...
+        2. Request ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit SHA, or the version and commit that GET /api/version reports.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Service (src)
+        - Web page (public)
+        - Python tooling (tools)
+        - Scripts (gate, deploy, smoke)
+        - Workflows (.github/workflows)
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Paste logs or gate output. Remove anything sensitive first. It is shown as a code block, so you do not need backticks.
+      render: shell

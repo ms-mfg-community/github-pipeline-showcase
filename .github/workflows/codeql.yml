@@ -1,0 +1,46 @@
+name: CodeQL
+
+# Code scanning for both languages in the repository: the TypeScript service and the small Python tool.
+# Neither needs a build, so CodeQL reads the source directly (build-mode: none).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, Mondays 05:27 UTC, so new queries are applied even when nothing has been pushed.
+    - cron: "27 5 * * 1"
+
+# Read-only by default; the one job that needs more asks for it below.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      security-events: write # upload the results to code scanning
+      contents: read # check out the repository
+      actions: read # read workflow run details (needed for private repositories)
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          category: "/language:${{ matrix.language }}"

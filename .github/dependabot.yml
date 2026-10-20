@@ -1,0 +1,50 @@
+version: 2
+
+# Weekly updates for every ecosystem the repository uses. Within each ecosystem, minor and patch updates
+# arrive together in one grouped pull request. Major updates are not grouped, so each one opens its own
+# pull request and gets its own review.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # Deliberately outdated: this is the npm dependency listed under "Intentional findings" in README.md.
+      # It is ignored so a Dependabot version update does not replace it and remove the demo's finding.
+      - dependency-name: morgan
+
+  - package-ecosystem: pip
+    directory: /tools
+    schedule:
+      interval: weekly
+    groups:
+      pip-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # Deliberately outdated: this is the pip dependency listed under "Intentional findings" in README.md.
+      # It is ignored for the same reason as morgan above.
+      - dependency-name: requests
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Keeps the commit SHAs in .github/workflows current, and the version comment beside each one.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]

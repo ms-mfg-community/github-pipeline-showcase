@@ -1,0 +1,40 @@
+{
+  "name": "github-pipeline-showcase",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A demonstration of GitHub CI/CD, multi-environment deployment, and supply-chain security.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "gate": "node scripts/gate.mjs",
+    "gate:list": "node scripts/gate.mjs --list",
+    "gate:test": "node --test scripts/gate.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:self-test": "node scripts/deploy.mjs --self-test",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "express": "5.2.1",
+    "morgan": "1.10.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/express": "5.0.6",
+    "@types/morgan": "1.9.10",
+    "@types/node": "26.6.4",
+    "@types/supertest": "7.2.1",
+    "eslint": "9.39.5",
+    "globals": "17.13.0",
+    "supertest": "7.3.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "2.1.9"
+  }
+}
