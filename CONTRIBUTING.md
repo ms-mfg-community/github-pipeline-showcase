@@ -11,7 +11,7 @@ looks wrong here is there on purpose.
 - Python 3, for the dev tooling in `tools/` (`npm run setup` puts it in a project-local `.venv`)
 - Docker, only if you want to build or run the container image
 
-## Run the gate before you open a pull request
+## Run the gate before opening a pull request
 
 ```sh
 npm run setup      # once per machine: install Node dependencies, create .venv with the Python dev tooling
