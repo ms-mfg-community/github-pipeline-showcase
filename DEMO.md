@@ -1,7 +1,7 @@
 # Demo runbook
 
 A click-through of this repository's pipeline for a live audience, in the nine steps from
-[SPEC.md](SPEC.md) section 8.3. Each step says what to click and what the audience should see.
+[SPEC.md](SPEC.md) section 8.3. Each step lists what to click and what the audience should see.
 
 > **Everything on GitHub's side is described from GitHub's documentation, not from a run.** The
 > repository this runbook was written for did not exist yet, so nothing below has been observed on a
