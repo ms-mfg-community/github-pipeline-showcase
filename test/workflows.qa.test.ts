@@ -382,7 +382,7 @@ describe("WP2 actual workflow deliverables", () => {
         expect(steps(container)[buildIndex]?.run).toContain(String(scan.with?.["image-ref"]));
         expect(scan.with?.output).toEqual(expect.any(String));
         expect(action(container, "github/codeql-action/upload-sarif").with?.sarif_file).toBe(scan.with?.output);
-        expect(permissionFor(container, "aquasecurity/trivy-action")).toEqual({ "security-events": "write", contents: "read" });
+        expect(permissionFor(container, "aquasecurity/trivy-action")).toEqual({ "security-events": "write", contents: "read", actions: "read" });
     });
 });
 
