@@ -1,7 +1,7 @@
 # SPEC — GitHub CI/CD & Security Showcase Repository
 
-**Status:** normative. **Repo root:** `C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo`
-**Target remote (not created yet):** `ms-mfg-community/github-pipeline-showcase` (private)
+**Status:** normative. **Repo root:** the root of this repository.
+**Remote:** `ms-mfg-community/github-pipeline-showcase`
 **Version:** 1.0 · 2026-10-15
 
 ---
@@ -10,7 +10,7 @@
 
 This repository is a **demonstration asset**. Its purpose is to show the GitHub platform — CI, gated multi-environment CD, Dependabot, CodeQL code scanning, secret scanning, supply-chain attestation — to a **customer-facing** audience.
 
-It is built in four **work packages (WP1–WP4)**. Each is implemented by a separate `dev-qa-judge` run. Appendix A holds the paste-ready invocations.
+It is built in four **work packages (WP1–WP4)**. Each is implemented by a separate `dev-qa-judge` run.
 
 ### How to read this document
 
@@ -549,148 +549,11 @@ The synthetic secret for step 3 must be an obviously-fake, non-functional value 
 
 ---
 
-## Appendix A — `dev-qa-judge` invocations
-
-Run these **one at a time, in order**, confirming each returns PASS before starting the next. `maxRounds: 3` is the default and is appropriate.
-
-> The workflow dispatches dev=`Vasher` (claude-sonnet-5.5), qa=`Wayne` (gpt-6.1-sol), judge=`judge` (claude-opus-5). QA and judge never see the dev's summary — which is exactly why §2 and §3 must carry the acceptance criteria rather than the dev's report.
-
-### WP1
-
-```
-task:
-Implement Work Package 1 (WP1) of the GitHub CI/CD showcase repository.
-
-The complete normative specification is at C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo/SPEC.md.
-Read §0, §1, §2, §3 and §4 — they are binding on every work package — then read §5, which is WP1.
-Do not read or implement §6, §7 or §8; those are later work packages.
-
-Repository root: C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo
-
-THE GATE AND TOOLCHAIN ARE ALREADY BUILT AND ALREADY GREEN. Read §2.4 carefully before
-you touch anything. scripts/gate.mjs, scripts/setup.mjs, scripts/gate.test.mjs,
-eslint.config.js, tsconfig.json, vitest.config.ts, tools/requirements-dev.txt and the
-"scripts" block of package.json are PRE-BUILT and MUST NOT BE MODIFIED — modifying any of
-them is an S1 finding under §3.1.9. If you believe the gate is wrong, say so in your
-summary rather than editing it.
-
-Run `npm run setup` once, then `npm run gate`. It currently reports 3/3 legs passed,
-4 skipped, exit 0 — a clean green baseline with nothing to tidy up. The typecheck and test
-legs are skipped because src/app.ts does not exist yet; creating it wakes BOTH of them, so
-the application and its tests must arrive together or the gate goes red.
-
-§2.4 also lists toolchain facts worth knowing before you start — notably that relative
-imports must carry the .js extension, that noUncheckedIndexedAccess is on, and that src/
-and test/ do not exist yet because git does not track empty directories.
-
-Acceptance is exactly §2 and §5.7: `npm run gate` exits 0 with legs 1-5 PASS and legs 6-7
-SKIP, `npm run gate:test` still exits 0 with 26 tests passing, and every file marked
-(normative — WP1) in §1.2 exists.
-§3 governs what may be reported as blocking; §3.4 lists things that are not findings at all.
-Take no GitHub-side action. Local commits only.
-
-scope:
-Only these paths may be created or modified: package.json (to ADD dependencies only — never
-to change the "scripts" block or re-pin the existing devDependencies), package-lock.json,
-Dockerfile, .dockerignore, LICENSE, README.md (stub only), src/**, public/**, test/**,
-tools/report.py, tools/test_report.py, tools/requirements.txt.
-Do not create src/insecure-demo.ts — it belongs to WP4.
-Do not modify SPEC.md, scripts/**, eslint.config.js, tsconfig.json, vitest.config.ts,
-or tools/requirements-dev.txt.
-```
-
-### WP2
-
-```
-task:
-Implement Work Package 2 (WP2) of the GitHub CI/CD showcase repository.
-
-The complete normative specification is at C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo/SPEC.md.
-Read §0, §1, §2, §3 and §4 — binding on every work package — then read §6, which is WP2.
-Do not implement §5, §7 or §8. WP1 is already complete; do not redo or refactor it.
-
-Repository root: C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo
-
-Acceptance is exactly §2 and §6.4: `npm run gate` must exit 0 with leg 6 now PASS, and
-`node scripts/validate-workflows.mjs` must exit 0.
-
-These workflows CANNOT be executed by this loop — it takes no GitHub action by design.
-Static validation is the acceptance. Per §3.4.4, "not proven to run in CI" is not a finding.
-Take no GitHub-side action. Local commits only.
-
-scope:
-Only these paths may be created or modified: .github/dependabot.yml,
-.github/workflows/ci.yml, .github/workflows/codeql.yml, .github/workflows/dependency-review.yml,
-.github/workflows/scorecard.yml, .github/workflows/container-scan.yml,
-scripts/validate-workflows.mjs, and the "scripts" section of package.json.
-Do not modify SPEC.md or any WP1 source file.
-```
-
-### WP3
-
-```
-task:
-Implement Work Package 3 (WP3) of the GitHub CI/CD showcase repository.
-
-The complete normative specification is at C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo/SPEC.md.
-Read §0, §1, §2, §3 and §4 — binding on every work package — then read §7, which is WP3.
-Do not implement §5, §6 or §8. WP1 and WP2 are already complete; do not redo or refactor them.
-
-Repository root: C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo
-
-Acceptance is exactly §2 and §7.6: `npm run gate` must exit 0 with leg 7 now PASS, and
-`node scripts/deploy.mjs --self-test` must exit 0 leaving no stray process or bound port.
-
-The central requirement is §7.1: build the image ONCE and promote the SAME sha256 digest
-through dev, test and prod. No deploy job may run `docker build`.
-Per §3.4.5, the deployment being mocked is the specified design, not a shortfall.
-Take no GitHub-side action. Local commits only.
-
-scope:
-Only these paths may be created or modified: .github/workflows/cd.yml,
-.github/workflows/rollback.yml, scripts/deploy.mjs, scripts/smoke.mjs, and the "scripts"
-section of package.json. Do not modify SPEC.md or any WP1/WP2 file.
-```
-
-### WP4
-
-```
-task:
-Implement Work Package 4 (WP4) of the GitHub CI/CD showcase repository.
-
-The complete normative specification is at C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo/SPEC.md.
-Read §0, §1, §2, §3 and §4 — binding on every work package — then read §8, which is WP4.
-WP1, WP2 and WP3 are already complete; do not redo or refactor them.
-
-Repository root: C:/Users/johnhain/Documents/ip-kits/github_pipeline_demo
-
-Acceptance is exactly §2 and §8.5.
-
-This work package DELIBERATELY ADDS VULNERABLE CODE in src/insecure-demo.ts. That is required
-product, not a defect — see §3.4.1 and §8.1. The vulnerabilities must be genuinely reachable
-from exported route handlers or CodeQL will not detect them, which would defeat the demo.
-They are gated behind ENABLE_INSECURE_DEMO === "true" and are off by default.
-The synthetic demo secret is an instruction to type during the demo and must NEVER be
-committed to the repository.
-
-This repository is customer-facing: no internal URLs, no real tenant/subscription/account IDs,
-no customer names, in files or in git history.
-Take no GitHub-side action. Local commits only.
-
-scope:
-Only these paths may be created or modified: README.md, DEMO.md, SECURITY.md, CONTRIBUTING.md,
-CODEOWNERS, .github/ISSUE_TEMPLATE/**, .github/pull_request_template.md,
-.github/rulesets/main-protection.json, src/insecure-demo.ts, and src/app.ts (solely to mount
-the demo router). Do not modify SPEC.md.
-```
-
----
-
-## Appendix B — human steps, outside the loop
+## Appendix — human steps, outside the loop
 
 These require a GitHub write and must be done by a person after WP4 passes.
 
-1. Create `ms-mfg-community/github-pipeline-showcase` as **private**.
+1. Create `ms-mfg-community/github-pipeline-showcase`.
 2. Confirm the Security tab shows Advanced Security, secret scanning, and push protection enabled.
 3. Push `main`.
 4. Create environments `dev`, `test`, `prod` with the §7.5 protection rules.
