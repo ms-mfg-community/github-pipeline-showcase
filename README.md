@@ -3,12 +3,34 @@
 A deliberately small Express 5 and TypeScript widgets service that exists to demonstrate a
 GitHub CI/CD pipeline. The service is simple on purpose; the pipeline around it is the point.
 
-> **This is a demonstration repository.** It contains intentional vulnerabilities and deliberately
-> outdated dependencies, listed under [Intentional findings](#intentional-findings). Do not deploy it
-> anywhere real. See [SECURITY.md](SECURITY.md).
+> [!WARNING]
+> **This is a demonstration repository, and it is vulnerable on purpose.** It contains intentional
+> vulnerabilities and deliberately outdated dependencies, listed under
+> [Intentional findings](#intentional-findings). A repository created from this template copies them.
+> Do not deploy it anywhere real, and do not copy `src/insecure-demo.ts` or the pinned `morgan` and
+> `requests` versions into a real project. See [SECURITY.md](SECURITY.md).
 
 To present it, follow the click-through runbook in [DEMO.md](DEMO.md). [SPEC.md](SPEC.md) holds the
 design and the acceptance criteria.
+
+## Using this repository as a template
+
+A repository created from this template gets the files and nothing else. GitHub does not copy
+repository settings, so set these up in your copy before you run the demo:
+
+1. **CODEOWNERS.** Replace `@johnhain-msft` in `CODEOWNERS` with your own user or team.
+2. **Security features.** In Settings, then Advanced Security, turn on the dependency graph,
+   Dependabot alerts, secret scanning and push protection. Leave CodeQL on advanced setup so that
+   `codeql.yml` runs.
+3. **Environments.** Create `dev` (no rules), `test` (a 5-minute wait timer, deployments from `main`
+   only) and `prod` (a required reviewer, deployments from `main` only). [DEMO.md](DEMO.md) lists the
+   exact settings.
+4. **GitHub Pages.** Set the Pages source to GitHub Actions.
+5. **Ruleset.** Import `.github/rulesets/main-protection.json` under Settings, then Rules, then
+   Rulesets. Push `main` and let CI run once first, so the required checks exist when you import it.
+
+The CD workflow publishes the image to your own GitHub Container Registry namespace, so the first
+run creates a new package. Nothing is shared with this repository.
 
 ## What this repository demonstrates
 
